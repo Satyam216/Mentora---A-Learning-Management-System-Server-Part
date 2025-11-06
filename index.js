@@ -33,7 +33,7 @@ app.use('/quiz', verifySupabaseJWT, quizRouter);
 app.use('/progress', verifySupabaseJWT, progressRouter);
 
 // Payment: create-session requires auth; webhook must be raw body (the controller handles raw internally)
-app.post('/payment/create-checkout-session', verifySupabaseJWT, paymentRouter);
-app.post('/payment/webhook', paymentRouter); // webhook route expects raw body inside payment.js
+//app.post('/payment/create-checkout-session', verifySupabaseJWT, paymentRouter);
+//app.post('/payment/webhook', paymentRouter); // webhook route expects raw body inside payment.js
 
 app.listen(PORT, () => console.log(`LMS API listening on port ${PORT}`));
