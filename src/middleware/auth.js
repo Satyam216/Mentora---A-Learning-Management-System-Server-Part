@@ -1,27 +1,44 @@
-// backend/src/middleware/auth.js
-import { supabase } from '../lib/supabaseClient.js';
+const { supabaseAdmin } = require('../lib/supabaseClient');
 
-// Middleware expects: Authorization: Bearer <access_token>
-export default async function verifySupabaseJWT(req, res, next) {
+/** Extract Bearer token */
+function getToken(req) {
+  const h = req.headers.authorization || '';
+  const [, token] = h.split(' ');
+  return token || null;
+}
+
+/** Require a valid Supabase session token; attaches req.user & req.profile */
+async function requireAuth(req, res, next) {
   try {
-    const authHeader = req.headers.authorization || '';
-    if (!authHeader) return res.status(401).json({ error: 'No Authorization header' });
+    const token = getToken(req);
+    if (!token) return res.status(401).json({ error: 'Missing Authorization Bearer token' });
 
-    const parts = authHeader.split(' ');
-    if (parts.length !== 2) return res.status(401).json({ error: 'Malformed Authorization header' });
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !data?.user) return res.status(401).json({ error: 'Invalid token' });
 
-    const token = parts[1];
-    // Verify token & fetch user using Supabase server-side helper
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user) {
-      console.error('auth.getUser error', error);
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    }
+    req.user = data.user;
 
-    req.user = data.user; // contains id (sub), email, etc.
-    return next();
-  } catch (err) {
-    console.error('Auth middleware exception', err);
-    return res.status(401).json({ error: 'Authentication failed' });
+    const { data: profile, error: pErr } = await supabaseAdmin
+      .from('profiles').select('*').eq('id', data.user.id).single();
+
+    if (pErr) return res.status(403).json({ error: pErr.message });
+    req.profile = profile; // includes role
+    next();
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 }
+
+/** Role guard: pass array or single role */
+function requireRole(roles) {
+  const needs = Array.isArray(roles) ? roles : [roles];
+  return (req, res, next) => {
+    if (!req.profile) return res.status(401).json({ error: 'Unauthenticated' });
+    if (!needs.includes(req.profile.role)) {
+      return res.status(403).json({ error: 'Forbidden: insufficient role' });
+    }
+    next();
+  };
+}
+
+module.exports = { requireAuth, requireRole };

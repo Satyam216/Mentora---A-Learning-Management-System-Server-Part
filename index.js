@@ -1,39 +1,28 @@
-// backend/index.js
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import bodyParser from 'body-parser';
+require('dotenv').config();
+const express = require('express');
+const morgan = require('morgan');
+const cors = require('cors');
 
-import courseRouter from './src/controllers/course.js';
-import lessonsRouter from './src/controllers/lessons.js';
-import quizRouter from './src/controllers/quiz.js';
-import progressRouter from './src/controllers/progress.js';
-import paymentRouter from './src/controllers/payment.js';
-import verifySupabaseJWT from './src/middleware/auth.js';
+const authRoutes = require('./src/controllers/auth');
+const courseRoutes = require('./src/controllers/course');
+const lessonRoutes = require('./src/controllers/lessons');
+const quizRoutes = require('./src/controllers/quiz');
+const progressRoutes = require('./src/controllers/progress');
+const paymentRoutes = require('./src/controllers/payment');
 
-dotenv.config();
 const app = express();
-const PORT = process.env.PORT || 4000;
+app.use(cors({ origin: process.env.FRONTEND_URL?.split(',') || '*', credentials: true }));
+app.use(express.json({ limit: '15mb' }));
+app.use(morgan('dev'));
 
-// CORS: restrict in production to your frontend origin
-app.use(cors({ origin: process.env.FRONTEND_URL || true }));
+app.get('/health', (req, res) => res.json({ ok: true }));
 
-// For JSON body parsing
-app.use(bodyParser.json());
+app.use('/auth', authRoutes);
+app.use('/courses', courseRoutes);
+app.use('/lessons', lessonRoutes);
+app.use('/quiz', quizRoutes);
+app.use('/progress', progressRoutes);
+app.use('/payment', paymentRoutes);
 
-// Root health
-app.get('/', (req, res) => res.json({ status: 'ok', message: 'LMS Backend running' }));
-
-// Public routes
-app.use('/courses', courseRouter);
-
-// Protected (require Authorization header)
-app.use('/lessons', verifySupabaseJWT, lessonsRouter);
-app.use('/quiz', verifySupabaseJWT, quizRouter);
-app.use('/progress', verifySupabaseJWT, progressRouter);
-
-// Payment: create-session requires auth; webhook must be raw body (the controller handles raw internally)
-//app.post('/payment/create-checkout-session', verifySupabaseJWT, paymentRouter);
-//app.post('/payment/webhook', paymentRouter); // webhook route expects raw body inside payment.js
-
-app.listen(PORT, () => console.log(`LMS API listening on port ${PORT}`));
+const port = process.env.PORT || 4000;
+app.listen(port, () => console.log(`API running on :${port}`));
